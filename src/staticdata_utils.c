@@ -695,6 +695,17 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     static jl_array_t *deps = NULL;
     if (!deps)
         deps = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("_require_dependencies"));
+    static jl_array_t *depotpath = NULL;
+    if (!depotpath)
+        depotpath = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("DEPOT_PATH"));
+
+    size_t n_depotpath = depotpath ? jl_array_len(depotpath) : 0;
+    assert(n_depotpath > 0);
+    size_t *len_depotpath = (size_t *) malloc(sizeof(size_t) * n_depotpath);
+    for (size_t j = 0; j < n_depotpath; j++) {
+        len_depotpath[j] = jl_string_len(jl_array_ptr_ref(depotpath, j));
+        fprintf(fp, "%s\n", jl_string_data(jl_array_ptr_ref(depotpath, j)));
+    }
 
     // unique(deps) to eliminate duplicates while preserving order:
     // we preserve order so that the topmost included .jl file comes first
@@ -713,12 +724,31 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     initial_pos = ios_pos(s);
     write_uint64(s, 0);
     size_t i, l = udeps ? jl_array_len(udeps) : 0;
+    const char* depotprefix = "@depot";
+    char *localpath = NULL;
+    size_t len_depotprefix = strlen(depotprefix);
     for (i = 0; i < l; i++) {
         jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
         jl_value_t *dep = jl_fieldref(deptuple, 1);              // file abspath
         size_t slen = jl_string_len(dep);
+        const char *abspath = jl_string_data(dep);
+
+        // replace leading depot path with @depot
+        assert(slen > len_depotprefix);
+        for (size_t j = 0; j < n_depotpath; j++) {
+            size_t len = len_depotpath[j];
+            if (slen <= len)
+                continue;
+            if (strncmp(abspath, jl_string_data(jl_array_ptr_ref(depotpath,j)), len) != 0)
+                continue;
+            slen -= len - len_depotprefix;
+            localpath = (char *) realloc(localpath, sizeof(char) * slen);
+            strcpy(localpath, depotprefix);
+            strncpy(localpath+len_depotprefix, abspath+len, slen-len_depotprefix);
+            break;
+        }
         write_int32(s, slen);
-        ios_write(s, jl_string_data(dep), slen);
+        ios_write(s, localpath, slen);
         write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 2)));  // mtime
         jl_module_t *depmod = (jl_module_t*)jl_fieldref(deptuple, 0);  // evaluating module
         jl_module_t *depmod_top = depmod;
@@ -740,6 +770,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
         write_int32(s, 0);
     }
     write_int32(s, 0); // terminator, for ease of reading
+    free(localpath); localpath = NULL;
 
     // Calculate Preferences hash for current package.
     jl_value_t *prefs_hash = NULL;

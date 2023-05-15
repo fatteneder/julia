@@ -23,6 +23,18 @@ JL_DLLEXPORT int jl_generating_output(void)
 
 void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
     // Write the source-text for the dependent files
+    static jl_array_t *depotpath = NULL;
+    if (!depotpath)
+        depotpath = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("DEPOT_PATH"));
+    size_t n_depotpath = depotpath ? jl_array_len(depotpath) : 0;
+    assert(n_depotpath > 0);
+    size_t *len_depotpath = (size_t *) malloc(sizeof(size_t) * n_depotpath);
+    for (size_t j = 0; j < n_depotpath; j++) {
+        len_depotpath[j] = jl_string_len(jl_array_ptr_ref(depotpath, j));
+    }
+    const char* depotprefix = "@depot";
+    char *localpath = NULL;
+    size_t len_depotprefix = strlen(depotprefix);
     if (udeps) {
         // Go back and update the source-text position to point to the current position
         int64_t posfile = ios_pos(f);
@@ -54,8 +66,24 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
                     continue;
                 }
                 size_t slen = jl_string_len(dep);
+                // replace leading depot path with @depot
+                const char *abspath = depstr;
+                assert(slen > len_depotprefix);
+                for (size_t j = 0; j < n_depotpath; j++) {
+                /** for (size_t j = 0; j < 0; j++) { */
+                    size_t len = len_depotpath[j];
+                    if (slen <= len)
+                        continue;
+                    if (strncmp(abspath, jl_string_data(jl_array_ptr_ref(depotpath,j)), len) != 0)
+                        continue;
+                    slen -= len - len_depotprefix;
+                    localpath = (char *) realloc(localpath, sizeof(char) * slen);
+                    strcpy(localpath, depotprefix);
+                    strncpy(localpath+len_depotprefix, abspath+len, slen-len_depotprefix);
+                    break;
+                }
                 write_int32(f, slen);
-                ios_write(f, depstr, slen);
+                ios_write(f, localpath, slen);
                 posfile = ios_pos(f);
                 write_uint64(f, 0);   // placeholder for length of this file in bytes
                 uint64_t filelen = (uint64_t) ios_copyall(f, &srctext);
@@ -67,6 +95,7 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
         }
     }
     write_int32(f, 0); // mark the end of the source text
+    free(localpath); localpath = NULL;
 }
 
 JL_DLLEXPORT void jl_write_compiler_output(void)
