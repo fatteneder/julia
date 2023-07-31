@@ -371,7 +371,7 @@ its `PkgId`, or `nothing` if it cannot be found.
 If only the `name` argument is provided, it searches each environment in the
 stack and its named direct dependencies.
 
-There `where` argument provides the context from where to search for the
+The `where` argument provides the context from where to search for the
 package: in this case it first checks if the name matches the context itself,
 otherwise it searches all recursive dependencies (from the resolved manifest of
 each environment) until it locates the context `where`, and from there
@@ -1591,7 +1591,7 @@ const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
-const _require_dependencies = Any[] # a list of (mod, path, mtime) tuples that are the file dependencies of the module currently being precompiled
+const _require_dependencies = Any[] # a list of (mod, path, mtime, src_fsize, src_hash, depot_alias) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 function _include_dependency(mod::Module, _path::AbstractString)
     prev = source_path(nothing)
@@ -1602,7 +1602,8 @@ function _include_dependency(mod::Module, _path::AbstractString)
     end
     if _track_dependencies[]
         @lock require_lock begin
-        push!(_require_dependencies, (mod, path, mtime(path),
+        # @warn path
+        push!(_require_dependencies, (mod, path, mtime(path), UInt64(filesize(path)), _crc32c(open(path,"r")),
                                       path[1] == '\0' ? path : replace_depot_path(path)))
         end
     end
@@ -1709,7 +1710,7 @@ function require(into::Module, mod::Symbol)
         uuidkey, env = uuidkey_env
         if _track_dependencies[]
             path = binpack(uuidkey)
-            push!(_require_dependencies, (into, path, 0.0,
+            push!(_require_dependencies, (into, path, 0.0, UInt64(0), UInt32(0),
                                           path[1] == '\0' ? path : replace_depot_path(path)))
         end
         return _require_prelocked(uuidkey, env)
@@ -2409,6 +2410,8 @@ struct CacheHeaderIncludes
     id::PkgId
     filename::String
     mtime::Float64
+    src_fsize::UInt64
+    src_hash::UInt32
     modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
 end
 
@@ -2438,6 +2441,10 @@ function parse_cache_header(f::IO)
         totbytes -= n2
         mtime = read(f, Float64)
         totbytes -= 8
+        src_fsize = read(f, UInt64)
+        totbytes -= 8
+        src_hash = read(f, UInt32)
+        totbytes -= 4
         n1 = read(f, Int32)
         totbytes -= 4
         # map ids to keys
@@ -2458,9 +2465,9 @@ function parse_cache_header(f::IO)
         if depname[1] == '\0'
             push!(requires, modkey => binunpack(depname))
         elseif depname[1] == '@'
-            push!(includes, CacheHeaderIncludes(modkey, resolve_depot_path(depname), mtime, modpath))
+            push!(includes, CacheHeaderIncludes(modkey, resolve_depot_path(depname), mtime, src_fsize, src_hash, modpath))
         else
-            push!(includes, CacheHeaderIncludes(modkey, depname, mtime, modpath))
+            push!(includes, CacheHeaderIncludes(modkey, depname, mtime, src_fsize, src_hash, modpath))
         end
     end
     prefs = String[]
@@ -2920,16 +2927,26 @@ end
                     return true
                 end
                 ftime = mtime(f)
-                is_stale = ( ftime != ftime_req ) &&
-                           ( ftime != floor(ftime_req) ) &&           # Issue #13606, PR #13613: compensate for Docker images rounding mtimes
-                           ( ftime != ceil(ftime_req) ) &&            # PR: #47433 Compensate for CirceCI's truncating of timestamps in its caching
-                           ( ftime != trunc(ftime_req, digits=6) ) && # Issue #20837, PR #20840: compensate for GlusterFS truncating mtimes to microseconds
-                           ( ftime != 1.0 )  &&                       # PR #43090: provide compatibility with Nix mtime.
-                           !( 0 < (ftime_req - ftime) < 1e-6 )        # PR #45552: Compensate for Windows tar giving mtimes that may be incorrect by up to one microsecond
-                if is_stale
-                    @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
+                src_fsize = filesize(f)
+                if src_fsize != chi.src_fsize
+                    @debug "TODO"
                     return true
                 end
+                src_hash = _crc32c(open(f,"r"))
+                if src_hash != chi.src_hash
+                    @debug "TODO"
+                    return true
+                end
+                # is_stale = ( ftime != ftime_req ) &&
+                #            ( ftime != floor(ftime_req) ) &&           # Issue #13606, PR #13613: compensate for Docker images rounding mtimes
+                #            ( ftime != ceil(ftime_req) ) &&            # PR: #47433 Compensate for CirceCI's truncating of timestamps in its caching
+                #            ( ftime != trunc(ftime_req, digits=6) ) && # Issue #20837, PR #20840: compensate for GlusterFS truncating mtimes to microseconds
+                #            ( ftime != 1.0 )  &&                       # PR #43090: provide compatibility with Nix mtime.
+                #            !( 0 < (ftime_req - ftime) < 1e-6 )        # PR #45552: Compensate for Windows tar giving mtimes that may be incorrect by up to one microsecond
+                # if is_stale
+                #     @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
+                #     return true
+                # end
             end
         end
 
