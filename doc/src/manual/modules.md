@@ -578,6 +578,8 @@ code to help the user avoid other wrong-behavior situations:
 2. `global const` statements from local scope after `__init__()` has been started (see issue #12010
    for plans to add an error for this)
 3. Replacing a module is a runtime error while doing an incremental precompile.
+4. Any precompilation workload must restore the global variables `DEPOT_PATH, LOAD_PATH, ENV, Base.active_project()`
+   to their initial state at the end of execution.
 
 A few other points to be aware of:
 
