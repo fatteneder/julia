@@ -2296,6 +2296,11 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         task_local_storage()[:SOURCE_PATH] = source
     end
 
+    original_depot_path = copy(Base.DEPOT_PATH)
+    original_load_path = copy(Base.LOAD_PATH)
+    original_env = copy(ENV)
+    original_project = Base.active_project()
+
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
     Core.Compiler.track_newly_inferred.x = true
     try
@@ -2307,6 +2312,28 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     finally
         Core.Compiler.track_newly_inferred.x = false
     end
+
+    if Base.DEPOT_PATH != original_depot_path
+        msg = "Precompilation of $pkg mutated Base.DEPOT_PATH and did not restore the original values"
+        @error(msg, original_depot_path, DEPOT_PATH)
+        error(msg)
+    end
+    if Base.LOAD_PATH != original_load_path
+        msg = "Precompilation of $pkg mutated Base.LOAD_PATH and did not restore the original values"
+        @error(msg, original_load_path, LOAD_PATH)
+        error(msg)
+    end
+    if copy(ENV) != original_env
+        msg = "Precompilation of $pkg mutated ENV and did not restore the original values"
+        @error(msg)
+        error(msg)
+    end
+    if Base.active_project() != original_project
+        msg = "Precompilation of $pkg changed the active project and did not restore the original value"
+        @error(msg, original_project, Base.active_project())
+        error(msg)
+    end
+
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
