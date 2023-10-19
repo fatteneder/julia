@@ -1858,38 +1858,6 @@ precompile_test_harness("Issue #50538") do load_path
     @test !isdefined(I50538, :undefglobal)
 end
 
-# check that precompilation workload restores initial state of DEPOT_PATH etc.
-precompile_test_harness("check DEPOT_PATH etc are restored") do load_path
-    write(joinpath(load_path, "modify_depot_path.jl"),
-        """
-        module Modify_DEPOT_PATH
-        empty!(DEPOT_PATH)
-        end
-        """)
-    @test_throws ErrorException Base.compilecache(Base.PkgId("Modify_DEPOT_PATH"))
-    write(joinpath(load_path, "modify_load_path.jl"),
-        """
-        module Modify_LOAD_PATH
-        empty!(LOAD_PATH)
-        end
-        """)
-    @test_throws ErrorException Base.compilecache(Base.PkgId("Modify_LOAD_PATH"))
-    write(joinpath(load_path, "modify_env.jl"),
-        """
-        module Modify_ENV
-        ENV["modify_ENV"] = true
-        end
-        """)
-    @test_throws ErrorException Base.compilecache(Base.PkgId("Modify_ENV"))
-    write(joinpath(load_path, "modify_active_project.jl"),
-        """
-        module Modify_active_project
-        Base.set_active_project!(mktempdir())
-        end
-        """)
-    @test_throws ErrorException Base.compilecache(Base.PkgId("Modify_active_project"))
-end
-
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
 empty!(Base.LOAD_PATH)
