@@ -59,16 +59,20 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
                     continue;
                 }
 
-                jl_value_t **replace_depot_args;
-                JL_GC_PUSHARGS(replace_depot_args, 2);
-                replace_depot_args[0] = replace_depot_func;
-                replace_depot_args[1] = abspath;
-                jl_task_t *ct = jl_current_task;
-                size_t last_age = ct->world_age;
-                ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-                jl_value_t *depalias = (jl_value_t*)jl_apply(replace_depot_args, 2);
-                ct->world_age = last_age;
-                JL_GC_POP();
+                jl_value_t *relocatable = jl_fieldref(deptuple, 5);
+                jl_value_t *depalias = abspath;
+                if (jl_unbox_bool(relocatable)) {
+                    jl_value_t **replace_depot_args;
+                    JL_GC_PUSHARGS(replace_depot_args, 2);
+                    replace_depot_args[0] = replace_depot_func;
+                    replace_depot_args[1] = abspath;
+                    jl_task_t *ct = jl_current_task;
+                    size_t last_age = ct->world_age;
+                    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+                    depalias = (jl_value_t*)jl_apply(replace_depot_args, 2);
+                    ct->world_age = last_age;
+                    JL_GC_POP();
+                }
 
                 size_t slen = jl_string_len(depalias);
                 write_int32(f, slen);

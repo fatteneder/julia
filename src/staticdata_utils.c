@@ -718,8 +718,9 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     for (i = 0; i < l; i++) {
         jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
         jl_value_t *deppath = jl_fieldref(deptuple, 1);
+        jl_value_t *relocatable = jl_fieldref(deptuple, 5);
 
-        if (replace_depot_func) {
+        if (jl_unbox_bool(relocatable) && replace_depot_func) {
             jl_value_t **replace_depot_args;
             JL_GC_PUSHARGS(replace_depot_args, 2);
             replace_depot_args[0] = replace_depot_func;

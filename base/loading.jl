@@ -1704,9 +1704,10 @@ const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
-const _require_dependencies = Any[] # a list of (mod, abspath, fsize, hash, mtime) tuples that are the file dependencies of the module currently being precompiled
+const _require_dependencies = Any[] # a list of (mod, abspath, fsize, hash, mtime, relocatable) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
-function _include_dependency(mod::Module, _path::AbstractString; track_content=true)
+function _include_dependency(mod::Module, _path::AbstractString;
+                             track_content::Bool=true, relocatable::Bool=true)
     prev = source_path(nothing)
     if prev === nothing
         path = abspath(_path)
@@ -1719,10 +1720,10 @@ function _include_dependency(mod::Module, _path::AbstractString; track_content=t
                 @assert isfile(path) "can only hash files"
                 # use mtime=-1.0 here so that fsize==0 && mtime==0.0 corresponds to a missing include_dependency
                 push!(_require_dependencies,
-                      (mod, path, filesize(path), open(_crc32c, path, "r"), -1.0))
+                      (mod, path, filesize(path), open(_crc32c, path, "r"), -1.0, relocatable))
             else
                 push!(_require_dependencies,
-                      (mod, path, UInt64(0), UInt32(0), mtime(path)))
+                      (mod, path, UInt64(0), UInt32(0), mtime(path), relocatable))
             end
         end
     end
@@ -1739,8 +1740,20 @@ to be recompiled if the modification time of `path` changes.
 This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
 """
-function include_dependency(path::AbstractString)
-    _include_dependency(Main, path, track_content=false)
+function include_dependency(path::AbstractString; relocatable::Union{Nothing,Bool}=nothing)
+    if isnothing(relocatable)
+        dir = pathof(Base.__toplevel__)
+        # open("/tmp/testy.log", "w") do io
+        #     println(io, "SERS")
+        #     println(io, dir)
+        #     println(io, Main)
+        # end
+        println("SERS")
+        println(dir)
+        println(Main)
+        relocatable = isnothing(dir) ? false : startswith(path, dir)
+    end
+    _include_dependency(Main, path, track_content=false, relocatable=relocatable)
     return nothing
 end
 
@@ -1840,7 +1853,7 @@ function __require(into::Module, mod::Symbol)
         uuidkey, env = uuidkey_env
         if _track_dependencies[]
             path = binpack(uuidkey)
-            push!(_require_dependencies, (into, path, UInt64(0), UInt32(0), 0.0))
+            push!(_require_dependencies, (into, path, UInt64(0), UInt32(0), 0.0, true))
         end
         return _require_prelocked(uuidkey, env)
     finally
