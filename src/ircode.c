@@ -458,13 +458,15 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
 }
 
 static jl_code_info_flags_t code_info_flags(uint8_t inferred, uint8_t propagate_inbounds, uint8_t has_fcall,
-                                            uint8_t nospecializeinfer, uint8_t inlining, uint8_t constprop)
+                                            uint8_t nospecializeinfer, uint8_t interpret, uint8_t inlining,
+                                            uint8_t constprop)
 {
     jl_code_info_flags_t flags;
     flags.bits.inferred = inferred;
     flags.bits.propagate_inbounds = propagate_inbounds;
     flags.bits.has_fcall = has_fcall;
     flags.bits.nospecializeinfer = nospecializeinfer;
+    flags.bits.interpret = interpret;
     flags.bits.inlining = inlining;
     flags.bits.constprop = constprop;
     return flags;
@@ -825,7 +827,8 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     };
 
     jl_code_info_flags_t flags = code_info_flags(code->inferred, code->propagate_inbounds, code->has_fcall,
-                                                 code->nospecializeinfer, code->inlining, code->constprop);
+                                                 code->nospecializeinfer, code->interpret, code->inlining,
+                                                 code->constprop);
     write_uint8(s.s, flags.packed);
     static_assert(sizeof(flags.packed) == IR_DATASIZE_FLAGS, "ir_datasize_flags is mismatched with the actual size");
     write_uint16(s.s, code->purity.bits);
@@ -929,6 +932,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     code->propagate_inbounds = flags.bits.propagate_inbounds;
     code->has_fcall = flags.bits.has_fcall;
     code->nospecializeinfer = flags.bits.nospecializeinfer;
+    code->interpret = flags.bits.interpret;
     code->purity.bits = read_uint16(s.s);
     code->inlining_cost = read_uint16(s.s);
 
@@ -1003,6 +1007,16 @@ JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_string_t *data)
     jl_code_info_flags_t flags;
     flags.packed = jl_string_data(data)[ir_offset_flags];
     return flags.bits.inlining;
+}
+
+JL_DLLEXPORT uint8_t jl_ir_flag_interpret(jl_string_t *data)
+{
+    if (jl_is_code_info(data))
+        return ((jl_code_info_t*)data)->interpret;
+    assert(jl_is_string(data));
+    jl_code_info_flags_t flags;
+    flags.packed = jl_string_data(data)[ir_offset_flags];
+    return flags.bits.interpret;
 }
 
 JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_string_t *data)

@@ -3120,7 +3120,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(22,
+                        jl_perm_symsvec(23,
                             "code",
                             "codelocs",
                             "ssavaluetypes",
@@ -3139,11 +3139,12 @@ void jl_init_types(void) JL_GC_DISABLED
                             "propagate_inbounds",
                             "has_fcall",
                             "nospecializeinfer",
+                            "interpret",
                             "inlining",
                             "constprop",
                             "purity",
                             "inlining_cost"),
-                        jl_svec(22,
+                        jl_svec(23,
                             jl_array_any_type,
                             jl_array_int32_type,
                             jl_any_type,
@@ -3162,17 +3163,18 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
+                            jl_bool_type,
                             jl_uint8_type,
                             jl_uint8_type,
                             jl_uint16_type,
                             jl_uint16_type),
                         jl_emptysvec,
-                        0, 1, 22);
+                        0, 1, 23);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(30,
+                        jl_perm_symsvec(31,
                             "name",
                             "module",
                             "file",
@@ -3200,10 +3202,11 @@ void jl_init_types(void) JL_GC_DISABLED
                             "isva",
                             "is_for_opaque_closure",
                             "nospecializeinfer",
+                            "interpret",
                             "constprop",
                             "max_varargs",
                             "purity"),
-                        jl_svec(30,
+                        jl_svec(31,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -3231,11 +3234,12 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
+                            jl_bool_type,
                             jl_uint8_type,
                             jl_uint8_type,
                             jl_uint16_type),
                         jl_emptysvec,
-                        0, 1, 10);
+                        0, 1, 11);
     //const static uint32_t method_constfields[1] = { 0x03fc065f }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<6)|(1<<9)|(1<<10)|(1<<18)|(1<<19)|(1<<20)|(1<<21)|(1<<22)|(1<<23)|(1<<24)|(1<<25);
     //jl_method_type->name->constfields = method_constfields;
 
@@ -3452,6 +3456,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_methtable_type->types, 8, jl_long_type); // uint32_t plus alignment
     jl_svecset(jl_methtable_type->types, 9, jl_uint8_type);
     jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
+    // TODO Anything to do here?
     jl_svecset(jl_method_type->types, 12, jl_method_instance_type);
     jl_svecset(jl_method_instance_type->types, 6, jl_code_instance_type);
     jl_svecset(jl_code_instance_type->types, 14, jl_voidpointer_type);

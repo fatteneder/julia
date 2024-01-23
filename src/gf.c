@@ -2432,6 +2432,8 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     jl_method_t *def = mi->def.method;
     // disabling compilation per-module can override global setting
     if (jl_is_method(def)) {
+        if (((jl_method_t*)def)->interpret)
+            goto interpret;
         int mod_setting = jl_get_module_compile(((jl_method_t*)def)->module);
         if (mod_setting == JL_OPTIONS_COMPILE_OFF ||
             mod_setting == JL_OPTIONS_COMPILE_MIN)
@@ -2474,6 +2476,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     // if that didn't work and compilation is off, try running in the interpreter
     if (compile_option == JL_OPTIONS_COMPILE_OFF ||
         compile_option == JL_OPTIONS_COMPILE_MIN) {
+interpret:
         jl_code_info_t *src = jl_code_for_interpreter(mi, world);
         if (!jl_code_requires_compiler(src, 0)) {
             jl_code_instance_t *codeinst = jl_new_codeinst(mi,

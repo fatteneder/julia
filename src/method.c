@@ -105,7 +105,8 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             e->head == jl_meta_sym || e->head == jl_inbounds_sym ||
             e->head == jl_boundscheck_sym || e->head == jl_loopinfo_sym ||
             e->head == jl_aliasscope_sym || e->head == jl_popaliasscope_sym ||
-            e->head == jl_inline_sym || e->head == jl_noinline_sym) {
+            e->head == jl_inline_sym || e->head == jl_noinline_sym ||
+            e->head == jl_interpret_sym) {
             // ignore these
         }
         else {
@@ -334,6 +335,8 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                     li->inlining = 1;
                 else if (ma == (jl_value_t*)jl_noinline_sym)
                     li->inlining = 2;
+                else if (ma == (jl_value_t*)jl_interpret_sym)
+                    li->interpret = 1;
                 else if (ma == (jl_value_t*)jl_propagate_inbounds_sym)
                     li->propagate_inbounds = 1;
                 else if (ma == (jl_value_t*)jl_nospecializeinfer_sym)
@@ -397,6 +400,18 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
             }
             bd[j] = jl_nothing;
         }
+        // TODO Needed?
+        /** else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_interpret_sym) { */
+        /**     is_flag_stmt = 1; */
+        /**     jl_value_t *arg1 = expr_arg1(st); */
+        /**     if (arg1 == (jl_value_t*)jl_true) // enter interpret region */
+        /**         arraylist_push(inline_flags, (void*)0); */
+        /**     else {                             // exit interpret region */
+        /**         assert(arg1 == (jl_value_t*)jl_false); */
+        /**         arraylist_pop(inline_flags); */
+        /**     } */
+        /**     bd[j] = jl_nothing; */
+        /** } */
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_purity_sym) {
             is_flag_stmt = 1;
             size_t na = jl_expr_nargs(st);
@@ -519,6 +534,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->propagate_inbounds = 0;
     src->has_fcall = 0;
     src->nospecializeinfer = 0;
+    src->interpret = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
     src->inlining = 0;
@@ -725,6 +741,7 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     }
     m->called = called;
     m->nospecializeinfer = src->nospecializeinfer;
+    m->interpret = src->interpret;
     m->constprop = src->constprop;
     m->purity.bits = src->purity.bits;
     jl_add_function_to_lineinfo(src, (jl_value_t*)m->name);
@@ -855,6 +872,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->deleted_world = ~(size_t)0;
     m->is_for_opaque_closure = 0;
     m->nospecializeinfer = 0;
+    m->interpret = 0;
     m->constprop = 0;
     m->purity.bits = 0;
     m->max_varargs = UINT8_MAX;

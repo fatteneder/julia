@@ -355,6 +355,15 @@ macro noinline(x)
 end
 
 """
+    @interpret
+
+TODO
+"""
+macro interpret(x)
+    return annotate_meta_def_or_block(x, :interpret)
+end
+
+"""
     Base.@constprop setting [ex]
 
 Control the mode of interprocedural constant propagation for the annotated function.

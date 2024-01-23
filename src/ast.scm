@@ -528,7 +528,7 @@
   (and (length> e 1) (eq? (car e) 'meta)))
 
 (define (method-meta-sym? x)
-  (memq x '(inline noinline aggressive_constprop no_constprop propagate_inbounds)))
+  (memq x '(inline noinline interpret aggressive_constprop no_constprop propagate_inbounds)))
 
 (define (propagate-method-meta e)
   `(meta ,@(filter (lambda (x)

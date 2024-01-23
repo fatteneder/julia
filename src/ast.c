@@ -76,6 +76,7 @@ JL_DLLEXPORT jl_sym_t *jl_unused_sym;
 JL_DLLEXPORT jl_sym_t *jl_static_parameter_sym;
 JL_DLLEXPORT jl_sym_t *jl_inline_sym;
 JL_DLLEXPORT jl_sym_t *jl_noinline_sym;
+JL_DLLEXPORT jl_sym_t *jl_interpret_sym;
 JL_DLLEXPORT jl_sym_t *jl_generated_sym;
 JL_DLLEXPORT jl_sym_t *jl_generated_only_sym;
 JL_DLLEXPORT jl_sym_t *jl_isdefined_sym;
@@ -386,6 +387,7 @@ void jl_init_common_symbols(void)
     jl_static_parameter_sym = jl_symbol("static_parameter");
     jl_inline_sym = jl_symbol("inline");
     jl_noinline_sym = jl_symbol("noinline");
+    jl_interpret_sym = jl_symbol("interpret");
     jl_polly_sym = jl_symbol("polly");
     jl_propagate_inbounds_sym = jl_symbol("propagate_inbounds");
     jl_aggressive_constprop_sym = jl_symbol("aggressive_constprop");
@@ -1083,7 +1085,8 @@ static int is_self_quoting_expr(jl_expr_t *e) JL_NOTSAFEPOINT
             e->head == jl_meta_sym ||
             e->head == jl_boundscheck_sym ||
             e->head == jl_inline_sym ||
-            e->head == jl_noinline_sym);
+            e->head == jl_noinline_sym ||
+            e->head == jl_interpret_sym);
 }
 
 // any AST, except those that cannot contain symbols

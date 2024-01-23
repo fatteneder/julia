@@ -274,6 +274,7 @@
     XX(jl_ir_flag_inferred) \
     XX(jl_ir_flag_has_fcall) \
     XX(jl_ir_flag_inlining) \
+    XX(jl_ir_flag_interpret) \
     XX(jl_ir_inlining_cost) \
     XX(jl_ir_nslots) \
     XX(jl_ir_slotflag) \

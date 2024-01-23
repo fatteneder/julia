@@ -1056,6 +1056,7 @@ export
     @simd,
     @inline,
     @noinline,
+    @interpret,
     @nospecialize,
     @specialize,
     @polly,

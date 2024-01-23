@@ -630,6 +630,7 @@ typedef struct {
     uint8_t propagate_inbounds:1;
     uint8_t has_fcall:1;
     uint8_t nospecializeinfer:1;
+    uint8_t interpret:1;
     uint8_t inlining:2; // 0 = use heuristic; 1 = aggressive; 2 = none
     uint8_t constprop:2; // 0 = use heuristic; 1 = aggressive; 2 = none
 } jl_code_info_flags_bitfield_t;
@@ -1580,6 +1581,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_unused_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_static_parameter_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_inline_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_noinline_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_interpret_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_generated_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_generated_only_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_isdefined_sym;
