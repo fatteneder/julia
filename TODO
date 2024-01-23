@@ -1,0 +1,10 @@
+- What are causing these warnings? Did I forget to increment some counter?
+
+```sh
+  /home/flo/wd/julia/src/ircode.c: In function 'ijl_uncompress_ir':
+  /home/flo/wd/julia/src/ircode.c:930:33: warning: 'flags.bits.constprop' may be used uninitialized [-Wmaybe-uninitialized]
+    930 |     code->constprop = flags.bits.constprop;
+          |                       ~~~~~~~~~~^~~~~~~~~~
+  /home/flo/wd/julia/src/ircode.c:927:26: note: 'flags' declared here
+    927 |     jl_code_info_flags_t flags;
+```
