@@ -896,7 +896,9 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
         }
         if (jl_egal(rhs, old))
             return;
-        if (jl_typeof(rhs) != jl_typeof(old) || jl_is_type(rhs) || jl_is_module(rhs)) {
+        /** before: if (jl_typeof(rhs) != jl_typeof(old) || jl_is_type(rhs) || jl_is_module(rhs)) { */
+        /** should really be: (jl_typeof(rhs) != jl_typeof(old) || !jl_is_type_in_revised_module(rhs, mod) || jl_is_module(rhs)) { */
+        if (jl_typeof(rhs) != jl_typeof(old) || jl_is_module(rhs)) {
             jl_errorf("invalid redefinition of constant %s.%s",
                       jl_symbol_name(mod->name), jl_symbol_name(var));
 

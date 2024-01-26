@@ -221,9 +221,10 @@ function methodswith(@nospecialize(t::Type), @nospecialize(f::Base.Callable), me
     return meths
 end
 
-function _methodswith(@nospecialize(t::Type), m::Module, supertypes::Bool)
+function _methodswith(@nospecialize(t::Type), m::Module, supertypes::Bool, all::Bool)
     meths = Method[]
-    for nm in names(m)
+    # suggested in #33866
+    for nm in names(m; all)
         if isdefined(m, nm)
             f = getfield(m, nm)
             if isa(f, Base.Callable)
@@ -234,12 +235,12 @@ function _methodswith(@nospecialize(t::Type), m::Module, supertypes::Bool)
     return unique(meths)
 end
 
-methodswith(@nospecialize(t::Type), m::Module; supertypes::Bool=false) = _methodswith(t, m, supertypes)
+methodswith(@nospecialize(t::Type), m::Module; supertypes::Bool=false, all::Bool=false) = _methodswith(t, m, supertypes, all)
 
-function methodswith(@nospecialize(t::Type); supertypes::Bool=false)
+function methodswith(@nospecialize(t::Type); supertypes::Bool=false, all::Bool=false)
     meths = Method[]
     for mod in Base.loaded_modules_array()
-        append!(meths, _methodswith(t, mod, supertypes))
+        append!(meths, _methodswith(t, mod, supertypes, all))
     end
     return unique(meths)
 end
