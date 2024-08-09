@@ -3124,7 +3124,9 @@ end
 
 function replace_depot_path(path::AbstractString)
     @static if Sys.iswindows()
-        path = replace(path, Filesystem.path_separator_re=>Filesystem.pathsep())
+        drive, subpath = splitdrive(path)
+        path = string(drive,
+                      replace(subpath, Filesystem.path_separator_re=>Filesystem.pathsep()))
     end
     for depot in DEPOT_PATH
         !isdir(depot) && continue
@@ -3135,7 +3137,9 @@ function replace_depot_path(path::AbstractString)
         end
 
         @static if Sys.iswindows()
-            depot = replace(depot, Filesystem.path_separator_re=>Filesystem.pathsep())
+            drive, subpath = splitdrive(path)
+            depot = string(drive,
+                           replace(subpath, Filesystem.path_separator_re=>Filesystem.pathsep()))
         end
 
         if startswith(path, string(depot, Filesystem.pathsep())) || path == depot

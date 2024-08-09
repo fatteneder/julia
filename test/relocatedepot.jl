@@ -70,19 +70,32 @@ if !test_relocated_depot
                 @test Base.replace_depot_path(jlrc) != "@depot-rc2"
                 @test Base.replace_depot_path(jlrc) == jlrc
             end
+        end
+        test_harness(empty_depot_path=true) do
             if Sys.iswindows()
                 # windows accepts '\\' and '/' as path separators
                 mktempdir() do dir
                     jlrc = string(dir, "/", "julia-rc2")
                     jl   = string(dir, "/", "julia")
+                    drive, subdir = Base.Filesystem.splitdrive(dir)
+                    normed_jlrc = string(drive,
+                                         replace(subdir, Base.Filesystem.path_separator_re=>"/"),
+                                         "/", "julia-rc2")
+                    normed_jl   = string(drive,
+                                         replace(subdir, Base.Filesystem.path_separator_re=>"/"),
+                                         "/", "julia")
                     mkdir(jl)
                     push!(DEPOT_PATH, jl)
                     @test Base.replace_depot_path(jl) == "@depot"
+                    @test Base.replace_depot_path(normed_jl) == "@depot"
                     @test Base.replace_depot_path(string(jl,"/"))  == string("@depot","\\")
                     @test Base.replace_depot_path(string(jl,"\\")) == string("@depot","\\")
+                    @test Base.replace_depot_path(string(normed_jl,"/"))  == string("@depot","\\")
+                    @test Base.replace_depot_path(string(normed_jl,"\\")) == string("@depot","\\")
                     @test Base.replace_depot_path(jlrc) != "@depot-rc2"
-                    @test Base.replace_depot_path(jlrc) ==
-                        replace(jlrc, Base.Filesystem.path_separator_re=>"\\")
+                    @test Base.replace_depot_path(jlrc) == normed_jlrc
+                    @test Base.replace_depot_path(normed_jlrc) != "@depot-rc2"
+                    @test Base.replace_depot_path(normed_jlrc) == normed_jlrc
                 end
             end
         end
