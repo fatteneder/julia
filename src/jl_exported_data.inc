@@ -37,6 +37,7 @@
     XX(jl_datatype_type) \
     XX(jl_debuginfo_type) \
     XX(jl_densearray_type) \
+    XX(jl_depotpath_type) \
     XX(jl_diverror_exception) \
     XX(jl_emptysvec) \
     XX(jl_emptytuple) \

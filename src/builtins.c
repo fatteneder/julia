@@ -2531,6 +2531,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("AbstractString", (jl_value_t*)jl_abstractstring_type);
     add_builtin("String", (jl_value_t*)jl_string_type);
+    /** add_builtin("DepotPath", (jl_value_t*)jl_depotpath_type); */
 }
 
 #ifdef __cplusplus

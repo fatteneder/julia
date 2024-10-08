@@ -988,6 +988,14 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_string_type) {
         n += jl_static_show_string(out, jl_string_data(v), jl_string_len(v), 1);
     }
+    else if (vt == jl_depotpath_type) {
+        n += jl_printf(out, "DepotPath(");
+        jl_value_t *depot = (jl_value_t*)jl_fieldref_noalloc(v, 0);
+        jl_value_t *path = (jl_value_t*)jl_fieldref_noalloc(v, 1);
+        n += jl_static_show_string(out, jl_string_data(depot), jl_string_len(depot), 1);
+        n += jl_static_show_string(out, jl_string_data(path), jl_string_len(path), 1);
+        n += jl_printf(out, ")");
+    }
     else if (v == jl_bottom_type) {
         n += jl_printf(out, "Union{}");
     }

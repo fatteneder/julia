@@ -1236,15 +1236,24 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         depmods[i] = dep
     end
 
+    depotpaths = Any[]
     if ocachepath !== nothing
         @debug "Loading object cache file $ocachepath for $(repr("text/plain", pkg))"
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachepath, depmods, false, pkg.name, ignore_native)
+        GC.@preserve depotpaths begin
+            sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Any, Cint, Cstring, Cint), ocachepath, depmods, depotpaths, false, pkg.name, ignore_native)
+        end
     else
         @debug "Loading cache file $path for $(repr("text/plain", pkg))"
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), path, depmods, false, pkg.name)
     end
     if isa(sv, Exception)
         return sv
+    end
+
+    println("ANY depotpaths loaded?")
+    if length(depotpaths) > 0
+        println("WE FOUND GOLD :)")
+        display(depotpaths)
     end
 
     restored = register_restored_modules(sv, pkg, path)
@@ -3200,6 +3209,12 @@ function resolve_depot(inc::AbstractString)
     return :no_depot_found
 end
 
+const DP = DepotPath("SERS", "OIDA")
+
+function test_DP(dp::DepotPath)
+    dp.depot = "OIDA"
+    dp.path = "VODA"
+end
 
 function _parse_cache_header(f::IO, cachefile::AbstractString)
     flags = read(f, UInt8)

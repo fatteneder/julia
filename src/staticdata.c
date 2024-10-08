@@ -100,7 +100,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    193
+#define NUM_TAGS    194
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -192,6 +192,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_uint64_type);
         INSERT_TAG(jl_char_type);
         INSERT_TAG(jl_weakref_type);
+        INSERT_TAG(jl_depotpath_type);
         INSERT_TAG(jl_int8_type);
         INSERT_TAG(jl_int16_type);
         INSERT_TAG(jl_float16_type);
@@ -343,6 +344,8 @@ arraylist_t jl_linkage_blobs;
 arraylist_t jl_image_relocs;
 // Keep track of which image corresponds to which top module.
 arraylist_t jl_top_mods;
+// Keep track of all the DepotPaths loaded from all images.
+arraylist_t jl_image_depotpaths;
 
 // Eytzinger tree of images. Used for very fast jl_object_in_image queries
 // See https://algorithmica.org/en/eytzinger
@@ -816,6 +819,35 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
     }
 }
 
+/** static void jl_queue_depotpath_for_serialization(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED */
+/** { */
+/**     [> printf("SERS OIDA\n"); <] */
+/**     [> static jl_value_t *normalize_depots_func = NULL; <] */
+/**     [> if (!normalize_depots_func) <] */
+/**     [>     normalize_depots_func = jl_get_global(jl_base_module, jl_symbol("normalize_depots_for_relocation")); <] */
+/**     [> jl_task_t *ct = jl_current_task; <] */
+/**     [> size_t last_age = ct->world_age; <] */
+/**     [> ct->world_age = jl_atomic_load_acquire(&jl_world_counter); <] */
+/**     [> jl_value_t *depots = jl_apply(&normalize_depots_func, 1); <] */
+/**     [> ct->world_age = last_age; <] */
+/**     printf("SERS OIDA\n"); */
+/**     JL_TRY { */
+/**         jl_value_t *fn = jl_get_global(jl_base_module, jl_symbol("test_DP")); */
+/**         jl_value_t *args[2]; */
+/**         args[0] = fn; */
+/**         args[1] = v; */
+/**         jl_task_t *ct = jl_current_task; */
+/**         size_t last_age = ct->world_age; */
+/**         ct->world_age = jl_atomic_load_acquire(&jl_world_counter); */
+/**         jl_apply(args, 2); */
+/**         ct->world_age = last_age; */
+/**         printf("BLALBA OIDA\n"); */
+/**     } */
+/**     JL_CATCH { */
+/**         jl_rethrow(); */
+/**     } */
+/** } */
+
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"
 // in serialization (i.e., have its own entry in `serialization_order`). Consequently,
 // objects that act as containers for other potentially-"problematic" objects must add such "children"
@@ -983,6 +1015,9 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 }
             }
         }
+        /** if (jl_typetagis(v, jl_depotpath_type)) { */
+        /**     jl_queue_depotpath_for_serialization(s, v); */
+        /** } */
         char *data = (char*)jl_data_ptr(v);
         size_t i, np = layout->npointers;
         for (i = 0; i < np; i++) {
@@ -1966,6 +2001,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
 {
     enum RefTags tag = (enum RefTags)(reloc_id >> RELOC_TAG_OFFSET);
     size_t offset = (reloc_id & (((uintptr_t)1 << RELOC_TAG_OFFSET) - 1));
+    /** printf("%d ", tag); */
     switch (tag) {
     case DataRef:
         assert(offset <= s->s->size);
@@ -3206,6 +3242,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
 
     // Make sure we don't run any Julia code concurrently after this point
     // since it will invalidate our serialization preparations
+    // TODO: From here on we can no longer call into Julia
     jl_gc_enable_finalizers(ct, 0);
     assert((ct->reentrant_timing & 0b1110) == 0);
     ct->reentrant_timing |= 0b1000;
@@ -3310,7 +3347,7 @@ extern void export_jl_small_typeof(void);
 // into the native code of the image. See https://github.com/JuliaLang/julia/pull/52123#issuecomment-1959965395.
 int IMAGE_NATIVE_CODE_TAINTED = 0;
 
-static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
+static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, jl_array_t *depotpaths, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
                                                  jl_array_t **extext_methods, jl_array_t **internal_methods,
                                                  jl_array_t **new_ext_cis, jl_array_t **method_roots_list,
@@ -3694,6 +3731,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 obj[0] = newobj;
             }
         }
+        /** else if (otyp == (uintptr_t)jl_depotpath_type) { */
+        /**     if (depotpaths) { */
+        /**         jl_value_t *m = obj[0]; */
+        /**         jl_array_ptr_1d_push(depotpaths, m); */
+        /**         printf("WE ARE PUSHING SOMETHING!!!!"); */
+        /**     } */
+        /** } */
         else {
             abort(); // should be unreachable
         }
@@ -3760,6 +3804,12 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             }
 #endif
         }
+        /** else if (jl_typetagis(obj, jl_depotpath_type)) { */
+        /**     if (depotpaths) { */
+        /**         jl_array_ptr_1d_push(depotpaths, obj); */
+        /**         printf("WE ARE PUSHING SOMETHING!!!!"); */
+        /**     } */
+        /** } */
         else {
             abort();
         }
@@ -3820,6 +3870,18 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         jl_gc_reset_alloc_count();
     arraylist_free(&deser_sym);
 
+    if (image->gvars_base && depotpaths) {
+        for (size_t i = 0; i < image->ngvars; i++) {
+            uintptr_t *gv = sysimg_gvars(image->gvars_base, image->gvars_offsets, i);
+            jl_value_t **obj = *(jl_value_t***)gv;
+            printf("ARE WE LOOPING????\n");
+            if (jl_typetagis(obj, jl_depotpath_type)) {
+                printf("WE FOUND SOMETHING!!!!!\n");
+                jl_array_ptr_1d_push(depotpaths, *obj);
+            }
+        }
+    }
+
     // Prepare for later external linkage against the sysimg
     // Also sets up images for protection against garbage collection
     arraylist_push(&jl_linkage_blobs, (void*)image_base);
@@ -3871,7 +3933,8 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
 }
 
 // TODO?: refactor to make it easier to create the "package inspector"
-static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, ios_t *f, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc)
+static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, ios_t *f, jl_image_t *image, jl_array_t *depmods, jl_array_t *depotpaths,
+                                                        int completeinfo, const char *pkgname, int needs_permalloc)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Pkgimg);
     jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, pkgname);
@@ -3915,8 +3978,9 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
                 ios_close(f);
             ios_static_buffer(f, sysimg, len);
             pkgcachesizes cachesizes;
-            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &new_ext_cis, &method_roots_list,
+            jl_restore_system_image_from_stream_(f, image, depmods, depotpaths, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &new_ext_cis, &method_roots_list,
                                                  &ext_targets, &edges, &base, &ccallable_list, &cachesizes);
+            /** printf("ARE WE GETTING HERE?"); */
             JL_SIGATOMIC_END();
 
             // No special processing of `new_ext_cis` is required because recaching handled it
@@ -3963,14 +4027,15 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
 static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image, uint32_t checksum)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Sysimg);
-    jl_restore_system_image_from_stream_(f, image, NULL, checksum | ((uint64_t)0xfdfcfbfa << 32), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    jl_restore_system_image_from_stream_(f, image, NULL, NULL, checksum | ((uint64_t)0xfdfcfbfa << 32), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(void* pkgimage_handle, const char *buf, jl_image_t *image, size_t sz, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(void* pkgimage_handle, const char *buf,
+        jl_image_t *image, size_t sz, jl_array_t *depmods, jl_array_t *depotpaths, int completeinfo, const char *pkgname, int needs_permalloc)
 {
     ios_t f;
     ios_static_buffer(&f, (char*)buf, sz);
-    jl_value_t *ret = jl_restore_package_image_from_stream(pkgimage_handle, &f, image, depmods, completeinfo, pkgname, needs_permalloc);
+    jl_value_t *ret = jl_restore_package_image_from_stream(pkgimage_handle, &f, image, depmods, depotpaths, completeinfo, pkgname, needs_permalloc);
     ios_close(&f);
     return ret;
 }
@@ -3983,7 +4048,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
             "Cache file \"%s\" not found.\n", fname);
     }
     jl_image_t pkgimage = {};
-    jl_value_t *ret = jl_restore_package_image_from_stream(NULL, &f, &pkgimage, depmods, completeinfo, pkgname, 1);
+    jl_value_t *ret = jl_restore_package_image_from_stream(NULL, &f, &pkgimage, depmods, NULL, completeinfo, pkgname, 1);
     ios_close(&f);
     return ret;
 }
@@ -4033,7 +4098,7 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
     JL_SIGATOMIC_END();
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, int completeinfo, const char *pkgname, int ignore_native)
+JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, jl_array_t *depotpaths, int completeinfo, const char *pkgname, int ignore_native)
 {
     void *pkgimg_handle = jl_dlopen(fname, JL_RTLD_LAZY);
     if (!pkgimg_handle) {
@@ -4061,7 +4126,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
         IMAGE_NATIVE_CODE_TAINTED = 1;
     }
 
-    jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_handle, pkgimg_data, &pkgimage, *plen, depmods, completeinfo, pkgname, 0);
+    jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_handle, pkgimg_data, &pkgimage, *plen, depmods, depotpaths, completeinfo, pkgname, 0);
 
     return mod;
 }

@@ -3194,6 +3194,11 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_an_empty_string = jl_pchar_to_string("\0", 1);
     *(size_t*)jl_an_empty_string = 0;
 
+    /** jl_depotpath_type = jl_new_datatype(jl_symbol("DepotPath"), core, jl_any_type, jl_emptysvec, */
+    /**                                     jl_perm_symsvec(2, "depot", "path"), */
+    /**                                     jl_svec(2, jl_string_type, jl_string_type), */
+    /**                                     jl_emptysvec, 0, 1, 2); */
+
     jl_typemap_level_type =
         jl_new_datatype(jl_symbol("TypeMapLevel"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(6,
@@ -3924,6 +3929,8 @@ void post_boot_hooks(void)
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
     jl_nulldebuginfo = (jl_debuginfo_t*)core("NullDebugInfo");
+
+    jl_depotpath_type = (jl_datatype_t*)core("DepotPath");
 
     jl_init_box_caches();
 

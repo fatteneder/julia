@@ -192,7 +192,7 @@ export
     Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
     AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects
-    Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
+    Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement, DepotPath,
     Array, Memory, MemoryRef, AtomicMemory, AtomicMemoryRef, GenericMemory, GenericMemoryRef,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
@@ -460,6 +460,11 @@ struct VecElement{T}
     VecElement{T}(value::T) where {T} = new(value) # disable converting constructor in Core
 end
 VecElement(arg::T) where {T} = VecElement{T}(arg)
+
+mutable struct DepotPath
+    depot::String
+    path::String
+end
 
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
