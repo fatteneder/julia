@@ -17,6 +17,7 @@ extern "C" {
 
 JL_DLLEXPORT void _jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint);
+JL_DLLEXPORT int _jl_mutex_islocked(jl_task_t *self, jl_mutex_t *lock);
 JL_DLLEXPORT void _jl_mutex_lock(jl_task_t *self, jl_mutex_t *lock);
 JL_DLLEXPORT int _jl_mutex_trylock_nogc(jl_task_t *self, jl_mutex_t *lock) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int _jl_mutex_trylock(jl_task_t *self, jl_mutex_t *lock);
@@ -26,6 +27,11 @@ JL_DLLEXPORT void _jl_mutex_unlock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT;
 static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
 {
     _jl_mutex_wait(jl_current_task, lock, safepoint);
+}
+
+static inline int jl_mutex_islocked(jl_mutex_t *lock)
+{
+    return _jl_mutex_islocked(jl_current_task, lock);
 }
 
 static inline void jl_mutex_lock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER

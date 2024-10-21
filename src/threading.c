@@ -899,6 +899,12 @@ static void jl_lock_frame_pop(jl_task_t *self)
     ptls->locks.len--;
 }
 
+int _jl_mutex_islocked(jl_task_t *self, jl_mutex_t *lock)
+{
+    jl_task_t *owner = jl_atomic_load_relaxed(&lock->owner);
+    return owner == self;
+}
+
 void _jl_mutex_lock(jl_task_t *self, jl_mutex_t *lock)
 {
     JL_SIGATOMIC_BEGIN_self();
