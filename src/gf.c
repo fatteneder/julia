@@ -2422,6 +2422,34 @@ static void record_precompile_statement(jl_method_instance_t *mi)
 
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT);
 
+static _Atomic(int) jl_use_cpjit = 0;
+JL_DLLEXPORT void jl_use_cpjit_set(int val) {
+    jl_atomic_store_relaxed(&jl_use_cpjit, val);
+}
+
+jl_mutex_t cpjit_lock;
+int jl_cpjit_compile_code_instance(jl_code_instance_t *ci, jl_code_info_t *src)
+{
+    static jl_value_t *cpjit = NULL;
+    if (!cpjit) {
+        cpjit = jl_get_global(jl_base_module, jl_symbol("cpjit"));
+    }
+    jl_value_t **cpjit_args;
+    JL_GC_PUSHARGS(cpjit_args, 3);
+    cpjit_args[0] = cpjit;
+    cpjit_args[1] = (jl_value_t*)ci;
+    cpjit_args[2] = (jl_value_t*)src;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    JL_LOCK(&cpjit_lock);
+    jl_value_t *success = (jl_value_t*)jl_apply(cpjit_args, 3);
+    JL_UNLOCK(&cpjit_lock);
+    ct->world_age = last_age;
+    JL_GC_POP();
+    return jl_unbox_int32(success);
+}
+
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
 {
     // quick check if we already have a compiled result
@@ -2562,6 +2590,13 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         }
 
         JL_GC_PUSH1(&codeinst);
+        if (jl_atomic_load_relaxed(&jl_use_cpjit) && !jl_mutex_islocked(&cpjit_lock)) {
+            jl_code_info_t *src = jl_code_for_interpreter(mi, world);
+            int cpjit_success = jl_cpjit_compile_code_instance(codeinst, src);
+            if (cpjit_success) {
+                printf("C2P compilation failed!");
+            }
+        }
         jl_compile_codeinst(codeinst);
 
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
