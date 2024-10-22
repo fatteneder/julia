@@ -2594,8 +2594,12 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         if (jl_atomic_load_relaxed(&jl_use_cpjit) && !jl_mutex_islocked(&cpjit_lock)) {
             jl_code_info_t *src = jl_code_for_interpreter(mi, world);
             int cpjit_success = jl_cpjit_compile_code_instance(codeinst, src);
-            if (cpjit_success) {
-                printf("C2P compilation failed!");
+            if (!cpjit_success) {
+                jl_method_t *def = mi->def.method;
+                if (jl_is_method(def))
+                    jl_printf(JL_STDERR, "cpjit compilation of method '%s' failed!\n", jl_symbol_name(def->name));
+                else
+                    jl_printf(JL_STDERR, "cpjit compilation failed!\n");
             }
         }
         jl_compile_codeinst(codeinst);
