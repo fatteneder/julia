@@ -2423,32 +2423,62 @@ static void record_precompile_statement(jl_method_instance_t *mi)
 
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT);
 
+// TODO Should do that similar to jl_typeinf_func
 static _Atomic(int) jl_use_cpjit = 0;
 JL_DLLEXPORT void jl_use_cpjit_set(int val) {
     jl_atomic_store_relaxed(&jl_use_cpjit, val);
 }
 
 jl_mutex_t cpjit_lock;
-int jl_cpjit_compile_code_instance(jl_code_instance_t *ci, jl_code_info_t *src)
+int jl_cpjit_compile_code_instance_impl(jl_code_instance_t *codeinst)
 {
+    jl_code_info_t *src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
+    jl_method_t *def = codeinst->def->def.method;
+    // from codegen.cpp:jl_emit_codeinst
+    if (def == jl_opaque_closure_method)
+        return 0;
+    if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def))
+        src = jl_uncompress_ir(def, codeinst, (jl_value_t*)src);
+    if (!src || !jl_is_code_info(src))
+        return 0;
     static jl_value_t *cpjit = NULL;
-    if (!cpjit) {
+    if (!cpjit)
         cpjit = jl_get_global(jl_base_module, jl_symbol("cpjit"));
-    }
     jl_value_t **cpjit_args;
     JL_GC_PUSHARGS(cpjit_args, 3);
     cpjit_args[0] = cpjit;
-    cpjit_args[1] = (jl_value_t*)ci;
+    cpjit_args[1] = (jl_value_t*)codeinst;
     cpjit_args[2] = (jl_value_t*)src;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    JL_LOCK(&cpjit_lock);
-    jl_value_t *success = (jl_value_t*)jl_apply(cpjit_args, 3);
-    JL_UNLOCK(&cpjit_lock);
+    int success;
+    JL_TRY {
+        JL_LOCK(&cpjit_lock);
+        jl_value_t *result = (jl_value_t*)jl_apply(cpjit_args, 3);
+        success = jl_unbox_int32(result);
+        JL_UNLOCK(&cpjit_lock);
+    }
+    JL_CATCH {
+        success = 0;
+    }
     ct->world_age = last_age;
     JL_GC_POP();
-    return jl_unbox_int32(success);
+    return success;
+}
+
+int jl_cpjit_compile_code_instance(jl_code_instance_t *codeinst)
+{
+    if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL) {
+        return 1;
+    }
+    int success = 0;
+    JL_LOCK(&jl_codegen_lock);
+    if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
+        success = jl_cpjit_compile_code_instance_impl(codeinst);
+    }
+    JL_UNLOCK(&jl_codegen_lock);
+    return success;
 }
 
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
@@ -2592,8 +2622,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
 
         JL_GC_PUSH1(&codeinst);
         if (jl_atomic_load_relaxed(&jl_use_cpjit) && !jl_mutex_islocked(&cpjit_lock)) {
-            jl_code_info_t *src = jl_code_for_interpreter(mi, world);
-            int cpjit_success = jl_cpjit_compile_code_instance(codeinst, src);
+            int cpjit_success = jl_cpjit_compile_code_instance(codeinst);
             if (!cpjit_success) {
                 jl_method_t *def = mi->def.method;
                 if (jl_is_method(def))
