@@ -471,6 +471,7 @@ typedef struct _jl_code_instance_t {
         _Atomic(jl_fptr_sparam_t) fptr3;
         // 4 interpreter
     } specptr; // private data for `jlcall entry point
+    _Atomic(jl_value_t *) cpjit_mc;
 } jl_code_instance_t;
 
 // all values are callable as Functions
