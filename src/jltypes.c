@@ -3294,7 +3294,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_instance_type =
         jl_new_datatype(jl_symbol("CodeInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(17,
+                        jl_perm_symsvec(18,
                             "def",
                             "owner",
                             "next",
@@ -3309,8 +3309,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             "ipo_purity_bits", "purity_bits",
                             "analysis_results",
                             "specsigflags", "precompile", "relocatability",
-                            "invoke", "specptr"), // function object decls
-                        jl_svec(17,
+                            "invoke", "specptr", "cpjit_mc"), // function object decls
+                        jl_svec(18,
                             jl_method_instance_type,
                             jl_any_type,
                             jl_any_type,
@@ -3327,12 +3327,12 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_bool_type,
                             jl_uint8_type,
-                            jl_any_type, jl_any_type), // fptrs
+                            jl_any_type, jl_any_type, jl_any_type), // fptrs
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 2, jl_code_instance_type);
-    const static uint32_t code_instance_constfields[1]  = { 0b00000101011100011 }; // Set fields 1, 2, 6-8, 10, 12 as const
-    const static uint32_t code_instance_atomicfields[1] = { 0b11011010100011100 }; // Set fields 3-5, 9, 11, 13-14, 16-17 as atomic
+    const static uint32_t code_instance_constfields[1]  = { 0b000000101011100011 }; // Set fields 1, 2, 6-8, 10, 12 as const
+    const static uint32_t code_instance_atomicfields[1] = { 0b111011010100011100 }; // Set fields 3-5, 9, 11, 13-14, 16-18 as atomic
     //Fields 4-5 are only operated on by construction and deserialization, so are const at runtime
     //Fields 12 and 16 must be protected by locks, and thus all operations on jl_code_instance_t are threadsafe
     jl_code_instance_type->name->constfields = code_instance_constfields;

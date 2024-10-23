@@ -490,6 +490,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         assert(const_flags & 2);
         jl_atomic_store_relaxed(&codeinst->invoke, jl_fptr_const_return);
     }
+    jl_atomic_store_relaxed(&codeinst->cpjit_mc, NULL);
     jl_atomic_store_relaxed(&codeinst->specsigflags, 0);
     jl_atomic_store_relaxed(&codeinst->precompile, 0);
     jl_atomic_store_relaxed(&codeinst->next, NULL);
