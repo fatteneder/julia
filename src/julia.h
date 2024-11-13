@@ -638,6 +638,7 @@ typedef struct _jl_module_t {
     _Atomic(uint32_t) counter;
     int32_t nospecialize;  // global bit flags: initialization for new methods
     int8_t optlevel;
+    int8_t cpjit;
     int8_t compile;
     int8_t infer;
     uint8_t istopmod;
