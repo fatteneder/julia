@@ -33,6 +33,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     m->nospecialize = 0;
     m->optlevel = -1;
     m->compile = -1;
+    m->cpjit = 1;
     m->infer = -1;
     m->max_methods = -1;
     m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
@@ -108,6 +109,16 @@ JL_DLLEXPORT int jl_get_module_compile(jl_module_t *m)
         value = m->compile;
     }
     return value;
+}
+
+JL_DLLEXPORT void jl_set_module_cpjit(jl_module_t *self, int val)
+{
+    self->cpjit = val;
+}
+
+JL_DLLEXPORT int jl_get_module_cpjit(jl_module_t *m)
+{
+    return m->cpjit;
 }
 
 JL_DLLEXPORT void jl_set_module_infer(jl_module_t *self, int value)
