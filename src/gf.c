@@ -2423,14 +2423,31 @@ static void record_precompile_statement(jl_method_instance_t *mi)
 
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT);
 
-// TODO Should do that similar to jl_typeinf_func
-static _Atomic(int) jl_use_cpjit = 0;
-JL_DLLEXPORT void jl_use_cpjit_set(int val) {
-    jl_atomic_store_relaxed(&jl_use_cpjit, val);
+_Atomic(int) jl_cpjit = 0;
+jl_function_t *jl_cpjit_call JL_GLOBALLY_ROOTED = NULL;
+jl_function_t *jl_cpjit_compile JL_GLOBALLY_ROOTED = NULL;
+JL_DLLEXPORT void jl_cpjit_enable(int val) {
+    if (val) {
+        if (!jl_cpjit_call)
+            jl_error("cannot enable cpjit if jl_cpjit_call has not been set");
+        if (!jl_cpjit_compile)
+            jl_error("cannot enable cpjit if jl_cpjit_compile has not been set");
+    }
+    jl_atomic_store_relaxed(&jl_cpjit, val);
+}
+JL_DLLEXPORT void jl_set_cpjit_call(jl_value_t *f) {
+    if (!f)
+        jl_error("cannot set jl_cpjit_call to NULL");
+    jl_cpjit_call = (jl_function_t *)f;
+}
+JL_DLLEXPORT void jl_set_cpjit_compile(jl_value_t *f) {
+    if (!f)
+        jl_error("cannot set jl_cpjit_compile to NULL");
+    jl_cpjit_compile = (jl_function_t *)f;
 }
 
 jl_mutex_t cpjit_lock;
-int jl_cpjit_compile_code_instance_impl(jl_code_instance_t *codeinst)
+static int jl_cpjit_compile_code_instance_impl(jl_code_instance_t *codeinst)
 {
     jl_code_info_t *src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
     jl_method_t *def = codeinst->def->def.method;
@@ -2441,34 +2458,31 @@ int jl_cpjit_compile_code_instance_impl(jl_code_instance_t *codeinst)
         src = jl_uncompress_ir(def, codeinst, (jl_value_t*)src);
     if (!src || !jl_is_code_info(src))
         return 0;
-    static jl_value_t *cpjit = NULL;
-    if (!cpjit)
-        cpjit = jl_get_global(jl_base_module, jl_symbol("cpjit"));
-    jl_value_t **cpjit_args;
-    JL_GC_PUSHARGS(cpjit_args, 3);
-    cpjit_args[0] = cpjit;
-    cpjit_args[1] = (jl_value_t*)codeinst;
-    cpjit_args[2] = (jl_value_t*)src;
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
-    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 2);
+    args[0] = (jl_value_t*)codeinst;
+    args[1] = (jl_value_t*)src;
+    /** jl_task_t *ct = jl_current_task; */
+    /** size_t last_age = ct->world_age; */
+    /** ct->world_age = jl_atomic_load_acquire(&jl_world_counter); */
     int success;
-    JL_LOCK(&cpjit_lock);
+    /** JL_LOCK(&cpjit_lock); */
     JL_TRY {
-        jl_value_t *result = (jl_value_t*)jl_apply(cpjit_args, 3);
+        jl_value_t *result = (jl_value_t*)jl_apply_generic(jl_cpjit_compile, args, 2);
         success = jl_unbox_int32(result);
     }
     JL_CATCH {
         success = 0;
     }
-    JL_UNLOCK(&cpjit_lock);
-    ct->world_age = last_age;
+    /** JL_UNLOCK(&cpjit_lock); */
+    /** ct->world_age = last_age; */
     JL_GC_POP();
     return success;
 }
 
-int jl_cpjit_compile_code_instance(jl_code_instance_t *codeinst)
+static int jl_cpjit_compile_code_instance(jl_code_instance_t *codeinst)
 {
+    // TODO Do we need to grab this lock?
     JL_LOCK(&jl_codegen_lock);
     int success = jl_cpjit_compile_code_instance_impl(codeinst);
     JL_UNLOCK(&jl_codegen_lock);
@@ -2615,16 +2629,27 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         }
 
         JL_GC_PUSH1(&codeinst);
-        if (jl_atomic_load_relaxed(&jl_use_cpjit) && !jl_mutex_islocked(&cpjit_lock)) {
-            int cpjit_success = jl_cpjit_compile_code_instance(codeinst);
-            if (!cpjit_success) {
-                jl_method_t *def = mi->def.method;
-                if (jl_is_method(def))
-                    jl_printf(JL_STDERR, "cpjit compilation of method '%s' failed!\n", jl_symbol_name(def->name));
-                else
-                    jl_printf(JL_STDERR, "cpjit compilation failed!\n");
+        /** jl_printf(JL_STDOUT, "jl_cpjit = %d\n", jl_atomic_load_relaxed(&jl_cpjit)); */
+        if (jl_atomic_load_relaxed(&jl_cpjit) && !jl_mutex_islocked(&cpjit_lock)) {
+            jl_method_t *def = codeinst->def->def.method;
+            if (jl_is_method(def) && def->module->cpjit) {
+            /** if (jl_is_method(def) && def->module->cpjit) { */
+                /** jl_printf(JL_STDOUT, "cpjit compiling %s.%s\n", jl_symbol_name(def->module->name), jl_symbol_name(def->name)); */
+                jl_cpjit_compile_code_instance(codeinst);
+                /** int cpjit_success = jl_cpjit_compile_code_instance(codeinst); */
+                /** if (!cpjit_success) { */
+                /**     jl_method_t *def = mi->def.method; */
+                /**     if (jl_is_method(def)) */
+                /**         jl_printf(JL_STDERR, "cpjit compilation of method '%s' failed!\n", jl_symbol_name(def->name)); */
+                /**     else */
+                /**         jl_printf(JL_STDERR, "cpjit compilation failed!\n"); */
+                /** } */
+                /** jl_printf(JL_STDOUT, "SUCCESS %s.%s\n", jl_symbol_name(def->module->name), jl_symbol_name(def->name)); */
+            /** } */
             }
         }
+        jl_method_t *def = codeinst->def->def.method;
+        jl_printf(JL_STDOUT, "compiling %s.%s\n", jl_symbol_name(def->module->name), jl_symbol_name(def->name));
         jl_compile_codeinst(codeinst);
 
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
@@ -3045,43 +3070,37 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
     jl_value_t *res;
-    /** int cpjit_success = 0; */
-    if (jl_atomic_load(&jl_use_cpjit)) {
-        jl_value_t *mc = jl_atomic_load_acquire(&codeinst->cpjit_mc);
-        if (mc && mc != jl_nothing) {
-            static jl_value_t *cpjit_call = NULL;
-            if (!cpjit_call)
-                cpjit_call = jl_get_global(jl_base_module, jl_symbol("cpjit_call"));
-            jl_value_t **cpjit_call_args;
-            JL_GC_PUSHARGS(cpjit_call_args, (int)nargs+2);
-            cpjit_call_args[0] = cpjit_call;
-            cpjit_call_args[1] = (jl_value_t*)mc;
-            for (int i = 0; i < nargs; i++)
-                cpjit_call_args[2+i] = args[i];
-            jl_task_t *ct = jl_current_task;
-            size_t last_age = ct->world_age;
-            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-            JL_TRY {
-                // TODO JL_TRY needed?
-                res = (jl_value_t*)jl_apply(cpjit_call_args, nargs+2);
-                /** cpjit_success = 1; */
+    if (jl_atomic_load_relaxed(&jl_cpjit)) {
+        jl_method_t *def = codeinst->def->def.method;
+        if (jl_is_method(def) && def->module->cpjit) {
+            jl_value_t *mc = jl_atomic_load_acquire(&codeinst->cpjit_mc);
+            if (mc) {
+                jl_array_t *call_args = jl_alloc_vec_any(nargs);
+                JL_GC_PUSH1(&call_args);
+                for (int i = 0; i < nargs; i++)
+                    jl_array_ptr_set(call_args, i, args[i]);
+                jl_task_t *ct = jl_current_task;
+                size_t last_age = ct->world_age;
+                ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+                JL_TRY {
+                    // TODO JL_TRY needed?
+                    res = (jl_value_t*)jl_apply_generic(jl_cpjit_call, (jl_value_t**)&call_args, 1);
+                }
+                JL_CATCH {
+                    jl_method_t *def = mfunc->def.method;
+                    if (jl_is_method(def))
+                        jl_printf(JL_STDERR, "cpjit compilation of method '%s' failed!\n", jl_symbol_name(def->name));
+                    else
+                        jl_printf(JL_STDERR, "cpjit compilation failed!\n");
+                }
+                ct->world_age = last_age;
+                JL_GC_POP();
             }
-            JL_CATCH {
-                jl_method_t *def = mfunc->def.method;
-                if (jl_is_method(def))
-                    jl_printf(JL_STDERR, "cpjit compilation of method '%s' failed!\n", jl_symbol_name(def->name));
-                else
-                    jl_printf(JL_STDERR, "cpjit compilation failed!\n");
-            }
-            ct->world_age = last_age;
-            JL_GC_POP();
         }
     }
-    /** if (!cpjit_success) { */
     jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
     // TODO Why does this consume a codeinst?
     res = invoke(F, args, nargs, codeinst);
-    /** } */
     return verify_type(res);
 }
 
